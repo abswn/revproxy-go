@@ -1,0 +1,10 @@
+port: 44562
+
+# Leave empty to auto-generate self-signed certificates
+https_cert_path: ""
+https_key_path: ""
+
+log:
+  level: "info"       # Options: debug, info, warn, error, off
+  output: "logs/output.log"    # "stdout" or a file path like "logs/output.log"
+  format: "text"      # "text" or "json"

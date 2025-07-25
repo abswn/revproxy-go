@@ -23,8 +23,11 @@ go.work.sum
 
 # env/config files
 .env
-config.yaml
-config.json
+*.yaml
+
+# Except specific ones
+!configs/config.yaml
+!configs/endpoints.example.yaml
 
 # certificates
 *.pem

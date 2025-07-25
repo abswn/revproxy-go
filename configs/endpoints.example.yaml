@@ -1,0 +1,29 @@
+endpoints:
+  "/path1":
+    strategy: round-robin # random, weighted, round-robin
+    urls:
+      - url: "https://example.com/api1"
+        # Optional: socks5, username, password
+        socks5: "127.0.0.1:1080"
+        username: "user1"
+        password: "pass1"
+      - url: "https://example.com/api2"
+      - url: "https://example.com/api3"
+
+  "/path2":
+    strategy: weighted
+    urls:
+      - url: "https://example.com/api1"
+        weight: 50
+      - url: "https://example.com/api2"
+        weight: 30
+      - url: "https://example.com/api3"
+        weight: 20
+
+exclusions:
+  - type: "short"
+    match: ["too many requests"]
+    duration: 60
+  - type: "long"
+    match: ["exceeded monthly allowance"]
+    duration: 3600
