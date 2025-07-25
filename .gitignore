@@ -33,3 +33,7 @@ go.work.sum
 *.pem
 *.key
 *.crt
+
+# log files
+logs/*
+*.log
