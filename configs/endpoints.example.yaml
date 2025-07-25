@@ -1,3 +1,5 @@
+enable: true
+
 endpoints:
   "/path1":
     strategy: round-robin # random, weighted, round-robin
@@ -14,7 +16,7 @@ endpoints:
     strategy: weighted
     urls:
       - url: "https://example.com/api1"
-        weight: 50
+        weight: 50 # Required for weighted strategy
       - url: "https://example.com/api2"
         weight: 30
       - url: "https://example.com/api3"
@@ -23,7 +25,7 @@ endpoints:
 exclusions:
   - type: "short"
     match: ["too many requests"]
-    duration: 60
+    duration: 60 # in seconds
   - type: "long"
     match: ["exceeded monthly allowance"]
     duration: 3600
