@@ -26,8 +26,8 @@ go.work.sum
 *.yaml
 
 # Except specific ones
-!configs/config.yaml
-!configs/endpoints.example.yaml
+!config/config.yaml
+!config/endpoints.example.yaml
 
 # certificates
 *.pem
