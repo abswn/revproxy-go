@@ -134,6 +134,8 @@ func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
 				}
 				configs[path] = strat
 			}
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to parse endpoint config %s: %v", entry.Name(), err)
 		}
 	}
 
