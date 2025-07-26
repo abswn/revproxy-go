@@ -8,7 +8,7 @@ import (
 	"github.com/abswn/revproxy-go/internal/config"
 )
 
-var localRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var weightedRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // Weighted algorithm selects a backend based on weighted random distribution.
 func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig, bool) {
@@ -30,7 +30,7 @@ func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig,
 	}
 
 	// Choose a random number in [1, totalWeight)
-	targetWeight := localRand.Intn(totalWeight) + 1
+	targetWeight := weightedRand.Intn(totalWeight) + 1
 
 	// Iterate and select based on cumulative weight
 	cumulative := 0
