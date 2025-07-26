@@ -23,7 +23,7 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 		return err
 	}
 
-	// Create outbound reqeust using r.Context() so that client disconnection cancels backend request
+	// Create outbound request using r.Context() so that client disconnection cancels backend request
 	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, parsedURL.String(), r.Body)
 	if err != nil {
 		log.Errorf("Failed to create proxy request: %v", err)
@@ -41,10 +41,12 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 
 	// If SOCKS5 proxy is specified, configure a custom Transport
 	if target.Socks5 != "" {
-		auth := &proxy.Auth{}
+		var auth *proxy.Auth
 		if target.Username != "" || target.Password != "" {
-			auth.User = target.Username
-			auth.Password = target.Password
+			auth = &proxy.Auth{
+				User:     target.Username,
+				Password: target.Password,
+			}
 		}
 
 		// Create a SOCKS5 dialer
@@ -54,6 +56,9 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 		})
 		if err != nil {
 			log.Errorf("Failed to create SOCKS5 dialer: %v", err)
+			// return error to prevent unexpected routing
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return err
 		} else {
 			// Override the default HTTP transport to route through SOCKS5
 			client.Transport = &http.Transport{
@@ -63,6 +68,7 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 	}
 
 	// Send the request to the backend URL
+	log.Infof("Forwarding %s request for %s to backend %s", r.Method, r.URL.Path, parsedURL)
 	resp, err := client.Do(proxyReq)
 	if err != nil {
 		log.Errorf("Request to backend failed: %v", err)
