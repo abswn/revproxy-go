@@ -29,11 +29,14 @@ go.work.sum
 !configs/config.yaml
 !configs/endpoints/example.com.yaml
 
-# certificates
+# Certificates
 *.pem
 *.key
 *.crt
 
-# log files
-logs/*
+# Log files
+logs/
 *.log
+
+# Temporary files
+scratch/
