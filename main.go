@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -76,20 +77,20 @@ func main() {
 	mux := http.NewServeMux()
 
 	for path, strategyCfg := range endpointsMap {
-		targets := strategyCfg.URLs
+		log.Debugf("Loaded raw endpoint config keys: %v", reflect.ValueOf(endpointsMap).MapKeys())
 
+		targets := strategyCfg.URLs
 		// Initialize counter for round-robin
 		if strategyCfg.Strategy == "round-robin" {
 			rrCounters[path] = new(uint32)
 		}
-
 		// Register HTTP handler for each path
-		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(path, recoveryMiddleware(func(w http.ResponseWriter, r *http.Request) {
 			var (
 				target config.URLConfig
 				ok     bool
 			)
-
+			log.Debugf("Registered handler for path: %s", path)
 			// Determine strategy
 			switch strategyCfg.Strategy {
 			case "round-robin":
@@ -100,22 +101,20 @@ func main() {
 				target, ok = strategy.Random(targets, banManager)
 			default:
 				// Unknown strategy, respond with 503
-				log.Warnf("Unsupported strategy for %s", path)
+				log.Warnf("Unsupported strategy '%s' for path %s", strategyCfg.Strategy, path)
 				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 				return
 			}
-
 			// If no usable backends are available
 			if !ok {
 				log.Warnf("%s - All backends temporarily banned for %s", strategyCfg.Strategy, path)
 				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 				return
 			}
-
-			// Forward reqeust to selected backend
+			// Forward request to selected backend
 			forward.ForwardRequest(w, r, target)
 
-		})
+		}))
 	}
 
 	// Start HTTPS server
@@ -128,5 +127,18 @@ func main() {
 	}
 	if err := server.ListenAndServeTLS(certPath, keyPath); err != nil {
 		log.Fatalf("HTTPS server failed: %v", err)
+	}
+}
+
+// recoveryMiddleware recovers from panics in HTTP handlers and responds with 500 Internal Server Error.
+func recoveryMiddleware(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Errorf("Panic recovered in handler for %s: %v", r.URL.Path, rec)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		}()
+		fn(w, r)
 	}
 }
