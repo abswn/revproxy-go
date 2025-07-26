@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
+	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -9,6 +12,8 @@ import (
 	"github.com/abswn/revproxy-go/internal/ban"
 	"github.com/abswn/revproxy-go/internal/cert"
 	"github.com/abswn/revproxy-go/internal/config"
+	"github.com/abswn/revproxy-go/internal/forward"
+	"github.com/abswn/revproxy-go/internal/strategy"
 )
 
 func main() {
@@ -33,6 +38,7 @@ func main() {
 			log.Fatalf("Failed to open log file: %v", err)
 		}
 		log.SetOutput(f)
+		defer f.Close()
 	}
 
 	if mainCfg.Log.Format == "json" {
@@ -63,6 +69,52 @@ func main() {
 	banManager := ban.NewManager()
 	banManager.StartEvictionLoop(5 * time.Second) // Check if it is time to re-add the banned URLs
 
-	// TO DO - Set up request router and start server
+	// Initialize round-robin counters per client endpoint
+	rrCounters := make(map[string]*uint32)
 
+	// Create the request multiplexer - matches incoming requests to handlers
+	mux := http.NewServeMux()
+
+	for path, strategyCfg := range endpointsMap {
+		targets := strategyCfg.URLs
+		var counter uint32
+		rrCounters[path] = &counter
+
+		switch strategyCfg.Strategy {
+		case "round-robin":
+			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+				target, ok := strategy.RoundRobin(targets, rrCounters[path], banManager)
+				if !ok {
+					log.Warnf("All backends temporarily banned for %s", path)
+					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+					return
+				}
+				forward.ForwardRequest(w, r, target)
+			})
+
+		case "weighted":
+			log.Info("Not implmented yet.")
+
+		case "random":
+			log.Info("Not implmented yet.")
+
+		default:
+			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+				log.Warnf("Unsupported strategy for %s", path)
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			})
+		}
+	}
+
+	// Start HTTPS server
+	log.Infof("Starting HTTPS server on :%d", mainCfg.Port)
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	server := &http.Server{
+		Addr:      fmt.Sprintf(":%d", mainCfg.Port),
+		TLSConfig: tlsConfig,
+		Handler:   mux,
+	}
+	if err := server.ListenAndServeTLS(certPath, keyPath); err != nil {
+		log.Fatalf("HTTPS server failed: %v", err)
+	}
 }
