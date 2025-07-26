@@ -77,49 +77,45 @@ func main() {
 
 	for path, strategyCfg := range endpointsMap {
 		targets := strategyCfg.URLs
-		var counter uint32
-		rrCounters[path] = &counter
 
-		switch strategyCfg.Strategy {
-		case "round-robin":
-			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-				target, ok := strategy.RoundRobin(targets, rrCounters[path], banManager)
-				if !ok {
-					log.Warnf("Round-robin - All backends temporarily banned for %s", path)
-					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-					return
-				}
-				forward.ForwardRequest(w, r, target)
-			})
+		// Initialize counter for round-robin
+		if strategyCfg.Strategy == "round-robin" {
+			rrCounters[path] = new(uint32)
+		}
 
-		case "weighted":
-			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-				target, ok := strategy.Weighted(targets, banManager)
-				if !ok {
-					log.Warnf("Weighted - All backends temporarily banned for %s", path)
-					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-					return
-				}
-				forward.ForwardRequest(w, r, target)
-			})
+		// Register HTTP handler for each path
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			var (
+				target config.URLConfig
+				ok     bool
+			)
 
-		case "random":
-			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-				target, ok := strategy.Random(targets, banManager)
-				if !ok {
-					log.Warnf("Random - All backends temporarily banned for %s", path)
-					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-					return
-				}
-				forward.ForwardRequest(w, r, target)
-			})
-
-		default:
-			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			// Determine strategy
+			switch strategyCfg.Strategy {
+			case "round-robin":
+				target, ok = strategy.RoundRobin(targets, rrCounters[path], banManager)
+			case "weighted":
+				target, ok = strategy.Weighted(targets, banManager)
+			case "random":
+				target, ok = strategy.Random(targets, banManager)
+			default:
+				// Unknown strategy, respond with 503
 				log.Warnf("Unsupported strategy for %s", path)
 				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-			})
-		}
+				return
+			}
+
+			// If no usable backends are available
+			if !ok {
+				log.Warnf("%s - All backends temporarily banned for %s", strategyCfg.Strategy, path)
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
+
+			// Forward reqeust to selected backend
+			forward.ForwardRequest(w, r, target)
+
+		})
 	}
 
 	// Start HTTPS server
