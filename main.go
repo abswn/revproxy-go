@@ -85,7 +85,7 @@ func main() {
 			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 				target, ok := strategy.RoundRobin(targets, rrCounters[path], banManager)
 				if !ok {
-					log.Warnf("All backends temporarily banned for %s", path)
+					log.Warnf("Round-robin - All backends temporarily banned for %s", path)
 					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 					return
 				}
@@ -93,7 +93,15 @@ func main() {
 			})
 
 		case "weighted":
-			log.Info("Not implmented yet.")
+			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+				target, ok := strategy.Weighted(targets, banManager)
+				if !ok {
+					log.Warnf("Weighted - All backends temporarily banned for %s", path)
+					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+					return
+				}
+				forward.ForwardRequest(w, r, target)
+			})
 
 		case "random":
 			log.Info("Not implmented yet.")
