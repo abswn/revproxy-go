@@ -1,0 +1,32 @@
+package strategy
+
+import (
+	"math/rand"
+	"time"
+
+	"github.com/abswn/revproxy-go/internal/ban"
+	"github.com/abswn/revproxy-go/internal/config"
+)
+
+var randomRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+// Random strategy selects a (non-banned) target URL randomly
+func Random(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig, bool) {
+
+	var validTargets []config.URLConfig
+
+	// Filter out banned URLs and prepare a list with valid weights
+	for _, u := range targets {
+		if !bm.IsBanned(u.URL) {
+			validTargets = append(validTargets, u)
+		}
+	}
+
+	if len(validTargets) == 0 {
+		return config.URLConfig{}, false
+	}
+
+	// Choose a random number in [0, len(validTargets)]
+	targetIndex := randomRand.Intn(len(validTargets))
+	return validTargets[targetIndex], true
+}

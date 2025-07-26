@@ -104,7 +104,15 @@ func main() {
 			})
 
 		case "random":
-			log.Info("Not implmented yet.")
+			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+				target, ok := strategy.Random(targets, banManager)
+				if !ok {
+					log.Warnf("Random - All backends temporarily banned for %s", path)
+					http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+					return
+				}
+				forward.ForwardRequest(w, r, target)
+			})
 
 		default:
 			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
