@@ -11,7 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/abswn/revproxy-go/internal/ban"
-	"github.com/abswn/revproxy-go/internal/cert"
 	"github.com/abswn/revproxy-go/internal/config"
 	"github.com/abswn/revproxy-go/internal/forward"
 	"github.com/abswn/revproxy-go/internal/strategy"
@@ -23,14 +22,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load main config: %v", err)
 	}
-
 	// Setup logger using logrus
 	level, err := log.ParseLevel(mainCfg.Log.Level)
 	if err != nil {
 		log.Fatalf("Invalid log level: %v", err)
 	}
 	log.SetLevel(level)
-
 	if mainCfg.Log.Output == "stdout" || mainCfg.Log.Output == "" {
 		log.SetOutput(os.Stdout)
 	} else {
@@ -41,7 +38,6 @@ func main() {
 		log.SetOutput(f)
 		defer f.Close()
 	}
-
 	if mainCfg.Log.Format == "json" {
 		log.SetFormatter(&log.JSONFormatter{})
 	} else {
@@ -49,15 +45,7 @@ func main() {
 			FullTimestamp: true,
 		})
 	}
-
 	log.Info("Logger initialized.")
-
-	// Ensure certificate exists or generate self-signed
-	certPath, keyPath, err := cert.EnsureCert(mainCfg.HTTPSCertPath, mainCfg.HTTPSKeyPath)
-	if err != nil {
-		log.Fatalf("Certificate error: %v", err)
-	}
-	log.Infof("Using certificate: %s and key: %s", certPath, keyPath)
 
 	// Load enabled endpoints
 	endpointsMap, err := config.LoadEnabledEndpointsMap("configs/endpoints")
@@ -113,20 +101,30 @@ func main() {
 			}
 			// Forward request to selected backend
 			forward.ForwardRequest(w, r, target)
-
 		}))
 	}
 
 	// Start HTTPS server
-	log.Infof("Starting HTTPS server on :%d", mainCfg.Port)
+	log.Infof("Starting server on port :%d", mainCfg.Port)
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", mainCfg.Port),
 		TLSConfig: tlsConfig,
 		Handler:   mux,
 	}
-	if err := server.ListenAndServeTLS(certPath, keyPath); err != nil {
-		log.Fatalf("HTTPS server failed: %v", err)
+	certExists := func() bool { _, err := os.Stat(mainCfg.HTTPSCertPath); return err == nil }()
+	keyExists := func() bool { _, err := os.Stat(mainCfg.HTTPSKeyPath); return err == nil }()
+	if certExists && keyExists {
+		log.Infof("TLS certificates found. Starting HTTPS server")
+		if err := server.ListenAndServeTLS(mainCfg.HTTPSCertPath, mainCfg.HTTPSKeyPath); err != nil {
+			log.Fatalf("HTTPS server failed: %v", err)
+		}
+	} else {
+		log.Warnf("TLS certificates not found. Falling back to HTTP.")
+		server.TLSConfig = nil
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatalf("HTTP server failed: %v", err)
+		}
 	}
 }
 
