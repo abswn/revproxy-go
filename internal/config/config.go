@@ -26,8 +26,8 @@ type MainConfig struct {
 	Log           LogConfig `yaml:"log"`
 }
 
-// EndpointURL defines a backend URL and optional proxy/auth settings.
-type EndpointURL struct {
+// URLConfig defines a single backend URL and optional proxy/auth settings.
+type URLConfig struct {
 	URL      string `yaml:"url"`
 	Socks5   string `yaml:"socks5,omitempty"`
 	Username string `yaml:"username,omitempty"`
@@ -35,41 +35,24 @@ type EndpointURL struct {
 	Weight   int    `yaml:"weight,omitempty"`
 }
 
-// EndpointStrategy maps paths to strategies and URLs.
-type EndpointStrategy map[string]struct {
-	Strategy string        `yaml:"strategy"`
-	URLs     []EndpointURL `yaml:"urls"`
-}
-
-// Exclusion defines temporary exclusion rules for backend responses.
-type Exclusion struct {
-	Type     string   `yaml:"type"`
+// BanRule defines the matching words and the duration of ban for backend URLs.
+type BanRule struct {
 	Match    []string `yaml:"match"`
 	Duration int      `yaml:"duration"`
 }
 
-// EndpointConfig represents a site-specific configuration.
-type EndpointConfig struct {
-	Enable     bool             `yaml:"enable"`
-	Endpoints  EndpointStrategy `yaml:"endpoints"`
-	Exclusions []Exclusion      `yaml:"exclusions"`
+// StrategyConfig defines a stategy, a slice of backend URLs to use for the strategy and the ban rules.
+type StrategyConfig struct {
+	Strategy string      `yaml:"strategy"`
+	URLs     []URLConfig `yaml:"urls"`
+	BanRules []BanRule   `yaml:"ban,omitempty"`
 }
 
-// Validate checks for required fields in MainConfig.
-func (c *MainConfig) Validate() error {
-	if c.Port == 0 {
-		return fmt.Errorf("port must be specified and non-zero")
-	}
-	if c.Log.Level == "" {
-		return fmt.Errorf("log.level must be specified")
-	}
-	if c.Log.Output == "" {
-		return fmt.Errorf("log.output must be specified")
-	}
-	if c.Log.Format == "" {
-		return fmt.Errorf("log.format must be specified")
-	}
-	return nil
+// EndpointsConfig represents all endpoints in a config file keyed by their paths.
+type EndpointsConfig struct {
+	Enable         bool                      `yaml:"enable"`
+	EndpointsMap   map[string]StrategyConfig `yaml:"endpoints"`
+	GlobalBanRules []BanRule                 `yaml:"global_ban"`
 }
 
 // Reads config.yaml and unmarshals it into MainConfig.
@@ -90,14 +73,42 @@ func LoadMainConfig(path string) (*MainConfig, error) {
 	return &cfg, nil
 }
 
+// Validate checks for required fields in MainConfig.
+func (c *MainConfig) Validate() error {
+	if c.Port == 0 {
+		return fmt.Errorf("port must be specified and non-zero")
+	}
+	if c.Log.Level == "" {
+		return fmt.Errorf("log.level must be specified")
+	}
+	if c.Log.Output == "" {
+		return fmt.Errorf("log.output must be specified")
+	}
+	if c.Log.Format == "" {
+		return fmt.Errorf("log.format must be specified")
+	}
+	return nil
+}
+
+// Replace empty local ban rules with global ban rules
+func applyGlobalBanRules(config *EndpointsConfig) {
+	// iterate over endpoint path and strategyConfig pairs
+	for path, strat := range config.EndpointsMap {
+		if len(strat.BanRules) == 0 {
+			strat.BanRules = config.GlobalBanRules
+			config.EndpointsMap[path] = strat
+		}
+	}
+}
+
 // Loads all YAML files (except config.yaml) with enable: true.
-func LoadEnabledEndpointConfigs(dir string) ([]EndpointConfig, error) {
+func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	var configs []EndpointConfig
+	configs := make(map[string]StrategyConfig)
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Name() == "config.yaml" || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
@@ -114,15 +125,16 @@ func LoadEnabledEndpointConfigs(dir string) ([]EndpointConfig, error) {
 			return nil, fmt.Errorf("duplicate endpoint path found: %s in %s", dup, fullPath)
 		}
 
-		var cfg EndpointConfig
+		var cfg EndpointsConfig
 		if err := yaml.Unmarshal(data, &cfg); err == nil && cfg.Enable {
-			configs = append(configs, cfg)
+			applyGlobalBanRules(&cfg)
+			for path, strat := range cfg.EndpointsMap {
+				if _, exists := configs[path]; exists {
+					return nil, fmt.Errorf("duplicate endpoint path found: %s", path)
+				}
+				configs[path] = strat
+			}
 		}
-	}
-
-	// find duplicate paths across files
-	if err = findDuplicateEndpointAcrossFiles(configs); err != nil {
-		return nil, err
 	}
 
 	return configs, nil
@@ -155,20 +167,4 @@ func findDuplicateEndpointWithinFile(data []byte) string {
 	}
 
 	return ""
-}
-
-// Find duplicate endpoint across files
-func findDuplicateEndpointAcrossFiles(configs []EndpointConfig) error {
-	seen := make(map[string]string) // path -> filename or index
-
-	for i, cfg := range configs {
-		for path := range cfg.Endpoints {
-			if prev, exists := seen[path]; exists {
-				return fmt.Errorf("duplicate path %q found in config[%d], also seen in %s", path, i, prev)
-			}
-			seen[path] = fmt.Sprintf("config[%d]", i)
-		}
-	}
-
-	return nil
 }

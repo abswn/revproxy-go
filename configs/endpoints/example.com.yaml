@@ -11,6 +11,11 @@ endpoints:
         password: "pass1"
       - url: "https://example.com/api2"
       - url: "https://example.com/api3"
+    ban:
+      - match : ["too many requests"]
+        duration: 60
+      - match : ["exceeded monthly allowance"]
+        duration: 3600
 
   "/path2":
     strategy: weighted
@@ -22,10 +27,9 @@ endpoints:
       - url: "https://example.com/api3"
         weight: 20
 
-exclusions:
-  - type: "short"
-    match: ["too many requests"]
+# Applies to all endpoints and is overridden locally
+global_ban:
+  - match: ["too many requests"]
     duration: 60 # in seconds
-  - type: "long"
-    match: ["exceeded monthly allowance"]
+  - match: ["exceeded monthly allowance"]
     duration: 3600

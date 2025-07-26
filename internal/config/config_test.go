@@ -7,7 +7,7 @@ import (
 )
 
 const mainConfigYAML = `
-port: 8080
+port: 44562
 https_cert_path: ""
 https_key_path: ""
 log:
@@ -23,15 +23,30 @@ endpoints:
     strategy: round-robin
     urls:
       - url: "https://example.com/api1"
+        socks5: "127.0.0.1:1080"
+        username: "user1"
+        password: "pass1"
+      - url: "https://example.com/api2"
+      - url: "https://example.com/api3"
+    ban:
+      - match: ["too many requests"]
+        duration: 60
+      - match: ["exceeded monthly allowance"]
+        duration: 3600
   "/path2":
     strategy: weighted
     urls:
-      - url: "https://example.com/api2"
+      - url: "https://example.com/api1"
         weight: 50
-exclusions:
-  - type: "short"
-    match: ["error"]
+      - url: "https://example.com/api2"
+        weight: 30
+      - url: "https://example.com/api3"
+        weight: 20
+global_ban:
+  - match: ["too many requests"]
     duration: 60
+  - match: ["exceeded monthly allowance"]
+    duration: 3600
 `
 
 const duplicateEndpointConfigYAML = `
@@ -50,54 +65,49 @@ endpoints:
 
 func TestLoadMainConfig_Valid(t *testing.T) {
 	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(mainConfigYAML), 0644); err != nil {
+	path := filepath.Join(tmp, "config.yaml")
+	if err := os.WriteFile(path, []byte(mainConfigYAML), 0644); err != nil {
 		t.Fatal(err)
 	}
-
-	cfg, err := LoadMainConfig(configPath)
+	cfg, err := LoadMainConfig(path)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-	if cfg.Port != 8080 {
-		t.Errorf("expected port 8080, got %d", cfg.Port)
+	if cfg.Port != 44562 {
+		t.Errorf("expected port 44562, got: %d", cfg.Port)
+	}
+	if cfg.Log.Level != "info" || cfg.Log.Output != "stdout" || cfg.Log.Format != "text" {
+		t.Errorf("unexpected log config: %+v", cfg.Log)
 	}
 }
 
-func TestLoadEnabledEndpointConfigs_Valid(t *testing.T) {
-	tmp := t.TempDir()
+func TestLoadEnabledEndpointsMap_Valid(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(mainConfigYAML), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "site1.yaml"), []byte(validEndpointConfigYAML), 0644)
 
-	// Write main config (ignored by loader)
-	_ = os.WriteFile(filepath.Join(tmp, "config.yaml"), []byte(mainConfigYAML), 0644)
-
-	// Write valid endpoint config
-	_ = os.WriteFile(filepath.Join(tmp, "site1.yaml"), []byte(validEndpointConfigYAML), 0644)
-
-	configs, err := LoadEnabledEndpointConfigs(tmp)
+	configs, err := LoadEnabledEndpointsMap(dir)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-	if len(configs) != 1 {
-		t.Errorf("expected 1 config, got %d", len(configs))
+	if len(configs) != 2 {
+		t.Errorf("expected 2 endpoints, got %d", len(configs))
 	}
 }
 
-func TestLoadEnabledEndpointConfigs_DuplicateWithinFile(t *testing.T) {
-	tmp := t.TempDir()
-	_ = os.WriteFile(filepath.Join(tmp, "config.yaml"), []byte(mainConfigYAML), 0644)
-	_ = os.WriteFile(filepath.Join(tmp, "duplicate.yaml"), []byte(duplicateEndpointConfigYAML), 0644)
+func TestLoadEnabledEndpointsMap_DuplicateWithinFile(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "duplicate.yaml"), []byte(duplicateEndpointConfigYAML), 0644)
 
-	_, err := LoadEnabledEndpointConfigs(tmp)
+	_, err := LoadEnabledEndpointsMap(dir)
 	if err == nil {
-		t.Fatal("expected error for duplicate path in file, got nil")
+		t.Fatal("expected error due to duplicate endpoint in same file")
 	}
 }
 
-func TestLoadEnabledEndpointConfigs_DuplicateAcrossFiles(t *testing.T) {
-	tmp := t.TempDir()
-	_ = os.WriteFile(filepath.Join(tmp, "config.yaml"), []byte(mainConfigYAML), 0644)
+func TestLoadEnabledEndpointsMap_DuplicateAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
 
-	// Two files with overlapping /path1
 	endpointA := `
 enable: true
 endpoints:
@@ -105,6 +115,12 @@ endpoints:
     strategy: round-robin
     urls:
       - url: "https://a.com"
+    ban:
+      - match: ["err"]
+        duration: 1
+global_ban:
+  - match: ["global"]
+    duration: 2
 `
 	endpointB := `
 enable: true
@@ -114,13 +130,18 @@ endpoints:
     urls:
       - url: "https://b.com"
         weight: 10
+    ban:
+      - match: ["err"]
+        duration: 1
+global_ban:
+  - match: ["global"]
+    duration: 2
 `
+	_ = os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(endpointA), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "b.yaml"), []byte(endpointB), 0644)
 
-	_ = os.WriteFile(filepath.Join(tmp, "a.yaml"), []byte(endpointA), 0644)
-	_ = os.WriteFile(filepath.Join(tmp, "b.yaml"), []byte(endpointB), 0644)
-
-	_, err := LoadEnabledEndpointConfigs(tmp)
+	_, err := LoadEnabledEndpointsMap(dir)
 	if err == nil {
-		t.Fatal("expected error for duplicate path across files, got nil")
+		t.Fatal("expected error due to duplicate endpoint across files")
 	}
 }
