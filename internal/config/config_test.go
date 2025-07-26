@@ -17,7 +17,7 @@ log:
 `
 
 const validEndpointConfigYAML = `
-enable: true
+enabled: true
 endpoints:
   "/path1":
     strategy: round-robin
@@ -50,7 +50,7 @@ global_ban:
 `
 
 const duplicateEndpointConfigYAML = `
-enable: true
+enabled: true
 endpoints:
   "/path1":
     strategy: round-robin
@@ -109,7 +109,7 @@ func TestLoadEnabledEndpointsMap_DuplicateAcrossFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	endpointA := `
-enable: true
+enabled: true
 endpoints:
   "/path1":
     strategy: round-robin
@@ -123,7 +123,7 @@ global_ban:
     duration: 2
 `
 	endpointB := `
-enable: true
+enabled: true
 endpoints:
   "/path1":
     strategy: weighted

@@ -1,4 +1,4 @@
-enable: true
+enabled: true
 
 endpoints:
   "/path1":

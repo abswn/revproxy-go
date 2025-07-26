@@ -50,7 +50,7 @@ type StrategyConfig struct {
 
 // EndpointsConfig represents all endpoints in a config file keyed by their paths.
 type EndpointsConfig struct {
-	Enable         bool                      `yaml:"enable"`
+	Enabled        bool                      `yaml:"enabled"`
 	EndpointsMap   map[string]StrategyConfig `yaml:"endpoints"`
 	GlobalBanRules []BanRule                 `yaml:"global_ban"`
 }
@@ -101,7 +101,7 @@ func applyGlobalBanRules(config *EndpointsConfig) {
 	}
 }
 
-// Loads all YAML files (except config.yaml) with enable: true.
+// Loads all YAML files (except config.yaml) with enabled: true.
 func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -126,7 +126,7 @@ func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
 		}
 
 		var cfg EndpointsConfig
-		if err := yaml.Unmarshal(data, &cfg); err == nil && cfg.Enable {
+		if err := yaml.Unmarshal(data, &cfg); err == nil && cfg.Enabled {
 			applyGlobalBanRules(&cfg)
 			for path, strat := range cfg.EndpointsMap {
 				if _, exists := configs[path]; exists {
