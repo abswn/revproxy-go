@@ -102,7 +102,7 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 	}
 
 	// Analyze response
-	bodyStr := bodyBuffer.String()
+	bodyStr := strings.ToLower(bodyBuffer.String())
 	if len(bodyStr) > 200 {
 		bodyStr = bodyStr[:200]
 	}
@@ -110,7 +110,6 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 	statusText := strings.ToLower(resp.Status)
 	shouldBan := false
 	banDuration := 0
-	banRuleText := ""
 	for _, rule := range banRules {
 		word := strings.ToLower(rule.Match)
 		if word == statusCodeStr ||
@@ -118,12 +117,11 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 			strings.Contains(bodyStr, word) {
 			shouldBan = true
 			banDuration = rule.Duration
-			banRuleText = rule.Match
 			break
 		}
 	}
 	if shouldBan {
-		log.Infof("Banning URL %s due to rule match: %s for %d secs", target.URL, banRuleText, banDuration)
+		log.Infof("Banning URL %s %s %s", target.URL, resp.Status, bodyStr)
 		bm.BanURL(target.URL, time.Duration(banDuration)*time.Second)
 	}
 
