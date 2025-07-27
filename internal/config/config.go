@@ -41,7 +41,7 @@ type BanRule struct {
 	Duration int      `yaml:"duration"`
 }
 
-// StrategyConfig defines a stategy, a slice of backend URLs to use for the strategy and the ban rules.
+// strategyConfig defines a stategy, a slice of backend URLs to use for the strategy and the ban rules.
 type StrategyConfig struct {
 	Strategy string      `yaml:"strategy"`
 	URLs     []URLConfig `yaml:"urls"`
@@ -90,25 +90,27 @@ func (c *MainConfig) Validate() error {
 	return nil
 }
 
-// Replace empty local ban rules with global ban rules
-func applyGlobalBanRules(config *EndpointsConfig) {
-	// iterate over endpoint path and strategyConfig pairs
-	for path, strat := range config.EndpointsMap {
-		if len(strat.BanRules) == 0 {
-			strat.BanRules = config.GlobalBanRules
-			config.EndpointsMap[path] = strat
-		}
-	}
+// For banrules flatenned from []string:int to string:int so that later overriding and applying becomes easier
+type BanRuleClean struct {
+	Match    string `yaml:"match"`
+	Duration int    `yaml:"duration"`
+}
+
+// Contains the flattened banrules
+type StrategyConfigClean struct {
+	Strategy string
+	URLs     []URLConfig
+	BanRules []BanRuleClean
 }
 
 // Loads all YAML files (except config.yaml) with enabled: true.
-func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
+func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfigClean, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	configs := make(map[string]StrategyConfig)
+	configs := make(map[string]StrategyConfigClean)
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Name() == "config.yaml" || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
@@ -127,12 +129,17 @@ func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
 
 		var cfg EndpointsConfig
 		if err := yaml.Unmarshal(data, &cfg); err == nil && cfg.Enabled {
-			applyGlobalBanRules(&cfg)
 			for path, strat := range cfg.EndpointsMap {
 				if _, exists := configs[path]; exists {
 					return nil, fmt.Errorf("duplicate endpoint path found: %s", path)
 				}
-				configs[path] = strat
+				clean := StrategyConfigClean{
+					Strategy: strat.Strategy,
+					URLs:     strat.URLs,
+					BanRules: flattenBanRules(strat.BanRules),
+				}
+				applyGlobalBanRules(&clean, cfg.GlobalBanRules)
+				configs[path] = clean
 			}
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to parse endpoint config %s: %v", entry.Name(), err)
@@ -140,6 +147,45 @@ func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfig, error) {
 	}
 
 	return configs, nil
+}
+
+// Helper function for LoadEnabledEndpointsMap - flatten the Ban rules to be inserted into StrategyConfigClean data structure
+func flattenBanRules(rules []BanRule) []BanRuleClean {
+	var flat []BanRuleClean
+	for _, rule := range rules {
+		for _, match := range rule.Match {
+			flat = append(flat, BanRuleClean{
+				Match:    match,
+				Duration: rule.Duration,
+			})
+		}
+	}
+	return flat
+}
+
+// Add the global ban rules to a StrategyConfigClean object
+func applyGlobalBanRules(clean *StrategyConfigClean, globalrules []BanRule) {
+	// iterate over global ban rules
+	for _, rule := range globalrules {
+		for _, word := range rule.Match {
+			if !hasBanRule(clean, word) {
+				clean.BanRules = append(clean.BanRules, BanRuleClean{
+					Match:    word,
+					Duration: rule.Duration,
+				})
+			}
+		}
+	}
+}
+
+// Checks if the given word exists in clean.BanRules
+func hasBanRule(clean *StrategyConfigClean, word string) bool {
+	for _, rule := range clean.BanRules {
+		if rule.Match == word {
+			return true
+		}
+	}
+	return false
 }
 
 // Find duplicate endpoint within same file, returns duplicate endpoint path
