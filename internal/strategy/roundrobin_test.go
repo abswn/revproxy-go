@@ -44,8 +44,8 @@ func TestRoundRobin_BanLogic(t *testing.T) {
 	bm.StartEvictionLoop(200 * time.Millisecond)
 
 	// Ban a.com and b.com
-	bm.BanURL("http://a.com", 1)
-	bm.BanURL("http://b.com", 1)
+	bm.BanURL("http://a.com", 1*time.Second)
+	bm.BanURL("http://b.com", 1*time.Second)
 
 	// Expect c.com to be selected repeatedly
 	for i := 0; i < 3; i++ {
@@ -78,7 +78,7 @@ func TestRoundRobin_AllBanned(t *testing.T) {
 	}
 	var counter uint32
 	bm := ban.NewManager()
-	bm.BanURL("http://x.com", 1)
+	bm.BanURL("http://x.com", 1*time.Second)
 
 	urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
 	if ok {

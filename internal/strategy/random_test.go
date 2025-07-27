@@ -41,7 +41,7 @@ func TestRandom_SomeBanned(t *testing.T) {
 	}
 
 	// Ban one of the URLs
-	bm.BanURL("http://backend2.com", 5)
+	bm.BanURL("http://backend2.com", 5*time.Second)
 
 	// Ensure we never get the banned one
 	for i := 0; i < 50; i++ {
