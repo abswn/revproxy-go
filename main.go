@@ -101,7 +101,7 @@ func main() {
 				return
 			}
 			// Forward request to selected backend
-			forward.ForwardRequest(w, r, target)
+			forward.ForwardRequest(w, r, target, strategyCfg.BanRules, banManager)
 		}))
 	}
 

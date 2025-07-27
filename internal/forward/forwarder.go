@@ -1,20 +1,24 @@
 package forward
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/abswn/revproxy-go/internal/ban"
 	"github.com/abswn/revproxy-go/internal/config"
 	"golang.org/x/net/proxy"
 )
 
 // ForwardRequest forwards the request to the given target URL.
-func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLConfig) error {
+func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLConfig, banRules []config.BanRuleClean, bm *ban.BanManager) error {
 	// Parse the target URL to ensure it's valid
 	parsedURL, err := url.Parse(target.URL)
 	if err != nil {
@@ -59,11 +63,10 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 			// return error to prevent unexpected routing
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 			return err
-		} else {
-			// Override the default HTTP transport to route through SOCKS5
-			client.Transport = &http.Transport{
-				DialContext: dialer.(proxy.ContextDialer).DialContext,
-			}
+		}
+		// Override the default HTTP transport to route through SOCKS5
+		client.Transport = &http.Transport{
+			DialContext: dialer.(proxy.ContextDialer).DialContext,
 		}
 	}
 
@@ -86,9 +89,42 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 	w.WriteHeader(resp.StatusCode)
 
 	// Stream the backend response body directly to the client
-	_, copyErr := io.Copy(w, resp.Body)
+	// _, copyErr := io.Copy(w, resp.Body)
+
+	// Use TeeReader to hold a copy of the response object for analysis
+	var bodyBuffer bytes.Buffer
+	tee := io.TeeReader(resp.Body, &bodyBuffer)
+
+	// Write response to client
+	_, copyErr := io.Copy(w, tee)
 	if copyErr != nil {
 		log.Warnf("Failed to copy response body: %v", copyErr)
+	}
+
+	// Analyze response
+	bodyStr := bodyBuffer.String()
+	if len(bodyStr) > 200 {
+		bodyStr = bodyStr[:200]
+	}
+	statusCodeStr := strconv.Itoa(resp.StatusCode)
+	statusText := strings.ToLower(resp.Status)
+	shouldBan := false
+	banDuration := 0
+	banRuleText := ""
+	for _, rule := range banRules {
+		word := strings.ToLower(rule.Match)
+		if word == statusCodeStr ||
+			strings.Contains(statusText, word) ||
+			strings.Contains(bodyStr, word) {
+			shouldBan = true
+			banDuration = rule.Duration
+			banRuleText = rule.Match
+			break
+		}
+	}
+	if shouldBan {
+		log.Infof("Banning URL %s due to rule match: %s for %d secs", target.URL, banRuleText, banDuration)
+		bm.BanURL(target.URL, time.Duration(banDuration)*time.Second)
 	}
 
 	return nil
