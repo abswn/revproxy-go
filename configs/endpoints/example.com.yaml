@@ -12,7 +12,7 @@ endpoints:
       - url: "https://example.com/api2"
       - url: "https://example.com/api3"
     ban:
-      - match : ["429", "500", "try after some time"]
+      - match : ["429", "try after some time"]
         duration: 30 # temporarily disables a backend for 30 secs
       - match : ["500"]
         duration: 3600
