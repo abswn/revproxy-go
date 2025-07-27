@@ -46,6 +46,7 @@ func main() {
 		})
 	}
 	log.Info("Logger initialized.")
+	fmt.Printf("Logging to %s", mainCfg.Log.Output)
 
 	// Load enabled endpoints
 	endpointsMap, err := config.LoadEnabledEndpointsMap("configs/endpoints")
@@ -126,6 +127,7 @@ func main() {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
 	}
+	fmt.Printf("Started revproxy server on port :%d...", mainCfg.Port)
 }
 
 // recoveryMiddleware recovers from panics in HTTP handlers and responds with 500 Internal Server Error.
