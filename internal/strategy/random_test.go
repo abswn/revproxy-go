@@ -2,6 +2,7 @@ package strategy_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/abswn/revproxy-go/internal/ban"
 	"github.com/abswn/revproxy-go/internal/config"
@@ -61,8 +62,8 @@ func TestRandom_AllBanned(t *testing.T) {
 		{URL: "http://backend2.com"},
 	}
 
-	bm.BanURL("http://backend1.com", 5)
-	bm.BanURL("http://backend2.com", 5)
+	bm.BanURL("http://backend1.com", 5*time.Second)
+	bm.BanURL("http://backend2.com", 5*time.Second)
 
 	_, ok := strategy.Random(targets, bm)
 	if ok {
