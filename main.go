@@ -46,7 +46,7 @@ func main() {
 		})
 	}
 	log.Info("Logger initialized.")
-	fmt.Printf("Logging to %s", mainCfg.Log.Output)
+	fmt.Printf("Logging to %s\n", mainCfg.Log.Output)
 
 	// Load enabled endpoints
 	endpointsMap, err := config.LoadEnabledEndpointsMap("configs/endpoints")
@@ -107,6 +107,7 @@ func main() {
 
 	// Start HTTPS server
 	log.Infof("Starting server on port :%d", mainCfg.Port)
+	fmt.Printf("Starting revproxy server on port %d...\n", mainCfg.Port)
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", mainCfg.Port),
@@ -127,7 +128,6 @@ func main() {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
 	}
-	fmt.Printf("Started revproxy server on port :%d...", mainCfg.Port)
 }
 
 // recoveryMiddleware recovers from panics in HTTP handlers and responds with 500 Internal Server Error.
