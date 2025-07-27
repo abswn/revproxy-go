@@ -1,7 +1,7 @@
 enabled: true
 
 endpoints:
-  "/path1":
+  "/api":
     strategy: round-robin # random, weighted, round-robin
     urls:
       - url: "https://example.com/api1"
@@ -12,12 +12,12 @@ endpoints:
       - url: "https://example.com/api2"
       - url: "https://example.com/api3"
     ban:
-      - match : ["too many requests"]
-        duration: 60
-      - match : ["exceeded monthly allowance"]
+      - match : ["429", "500", "try after some time"]
+        duration: 30 # temporarily disables a backend for 30 secs
+      - match : ["500"]
         duration: 3600
 
-  "/path2":
+  "/path":
     strategy: weighted
     urls:
       - url: "https://example.com/api1"
@@ -29,7 +29,7 @@ endpoints:
 
 # Applies to all endpoints and is overridden locally
 global_ban:
-  - match: ["too many requests"]
-    duration: 60 # in seconds
-  - match: ["exceeded monthly allowance"]
+  - match: ["429"]
+    duration: 30 # in seconds
+  - match: ["503", "out of capacity"]
     duration: 3600
