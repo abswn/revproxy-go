@@ -36,23 +36,23 @@ type URLConfig struct {
 }
 
 // BanRule defines the matching words and the duration of ban for backend URLs.
-type BanRule struct {
+type BanRuleRaw struct {
 	Match    []string `yaml:"match"`
 	Duration int      `yaml:"duration"`
 }
 
 // strategyConfig defines a stategy, a slice of backend URLs to use for the strategy and the ban rules.
 type StrategyConfig struct {
-	Strategy string      `yaml:"strategy"`
-	URLs     []URLConfig `yaml:"urls"`
-	BanRules []BanRule   `yaml:"ban,omitempty"`
+	Strategy    string       `yaml:"strategy"`
+	URLs        []URLConfig  `yaml:"urls"`
+	BanRulesRaw []BanRuleRaw `yaml:"ban,omitempty"`
 }
 
 // EndpointsConfig represents all endpoints in a config file keyed by their paths.
 type EndpointsConfig struct {
-	Enabled        bool                      `yaml:"enabled"`
-	EndpointsMap   map[string]StrategyConfig `yaml:"endpoints"`
-	GlobalBanRules []BanRule                 `yaml:"global_ban"`
+	Enabled           bool                      `yaml:"enabled"`
+	EndpointsMap      map[string]StrategyConfig `yaml:"endpoints"`
+	GlobalBanRulesRaw []BanRuleRaw              `yaml:"global_ban"`
 }
 
 // Reads config.yaml and unmarshals it into MainConfig.
@@ -136,9 +136,9 @@ func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfigClean, error)
 				clean := StrategyConfigClean{
 					Strategy: strat.Strategy,
 					URLs:     strat.URLs,
-					BanRules: flattenBanRules(strat.BanRules),
+					BanRules: flattenBanRules(strat.BanRulesRaw),
 				}
-				applyGlobalBanRules(&clean, cfg.GlobalBanRules)
+				applyGlobalBanRules(&clean, cfg.GlobalBanRulesRaw)
 				configs[path] = clean
 			}
 		} else if err != nil {
@@ -150,7 +150,7 @@ func LoadEnabledEndpointsMap(dir string) (map[string]StrategyConfigClean, error)
 }
 
 // Helper function for LoadEnabledEndpointsMap - flatten the Ban rules to be inserted into StrategyConfigClean data structure
-func flattenBanRules(rules []BanRule) []BanRuleClean {
+func flattenBanRules(rules []BanRuleRaw) []BanRuleClean {
 	var flat []BanRuleClean
 	for _, rule := range rules {
 		for _, match := range rule.Match {
@@ -164,7 +164,7 @@ func flattenBanRules(rules []BanRule) []BanRuleClean {
 }
 
 // Add the global ban rules to a StrategyConfigClean object
-func applyGlobalBanRules(clean *StrategyConfigClean, globalrules []BanRule) {
+func applyGlobalBanRules(clean *StrategyConfigClean, globalrules []BanRuleRaw) {
 	// iterate over global ban rules
 	for _, rule := range globalrules {
 		for _, word := range rule.Match {

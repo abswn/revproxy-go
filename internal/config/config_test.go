@@ -147,7 +147,7 @@ global_ban:
 }
 
 func TestFlattenBanRules(t *testing.T) {
-	input := []BanRule{
+	input := []BanRuleRaw{
 		{
 			Match:    []string{"word1", "word2"},
 			Duration: 30,
