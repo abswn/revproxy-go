@@ -112,8 +112,15 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 	banDuration := 0
 	for _, rule := range banRules {
 		word := strings.ToLower(rule.Match)
-		if word == statusCodeStr ||
-			strings.Contains(statusText, word) ||
+		// if the string is a 3 digit number
+		if len(word) == 3 {
+			_, err := strconv.Atoi(word)
+			if err == nil && word == statusCodeStr {
+				shouldBan = true
+				banDuration = rule.Duration
+				break
+			}
+		} else if strings.Contains(statusText, word) ||
 			strings.Contains(bodyStr, word) {
 			shouldBan = true
 			banDuration = rule.Duration
