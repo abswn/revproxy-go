@@ -1,6 +1,7 @@
 package strategy_test
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -121,5 +122,40 @@ func TestWeighted_SingleValidTarget(t *testing.T) {
 		if !ok || selected.URL != "http://only.com" {
 			t.Error("Expected single valid target to always be selected")
 		}
+	}
+}
+
+func TestWeighted_NegativeWeights(t *testing.T) {
+	bm := ban.NewManager()
+	targets := []config.URLConfig{
+		{URL: "http://a.com", Weight: -5},
+		{URL: "http://b.com", Weight: 10},
+	}
+
+	selected, ok := strategy.Weighted(targets, bm)
+	if !ok || selected.URL != "http://b.com" {
+		t.Error("Expected http://b.com to be selected, as http://a.com has negative weight")
+	}
+}
+
+func TestWeighted_EmptyTargets(t *testing.T) {
+	bm := ban.NewManager()
+	targets := []config.URLConfig{}
+
+	_, ok := strategy.Weighted(targets, bm)
+	if ok {
+		t.Error("Expected false when targets slice is empty")
+	}
+}
+
+func BenchmarkWeighted(b *testing.B) {
+	bm := ban.NewManager()
+	targets := make([]config.URLConfig, 1000)
+	for i := range 1000 {
+		targets[i] = config.URLConfig{URL: "http://example.com/" + strconv.Itoa(i), Weight: i + 1}
+	}
+
+	for b.Loop() {
+		strategy.Weighted(targets, bm)
 	}
 }
