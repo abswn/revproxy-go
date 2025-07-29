@@ -71,7 +71,7 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 	}
 
 	// Send the request to the backend URL
-	log.Infof("Forwarding %s request for %s to backend %s", r.Method, r.URL.Path, parsedURL)
+	log.Infof("Forwarding %s request for %s to backend %s", r.Method, r.URL.Path, SanitizeParsedURL(parsedURL))
 	resp, err := client.Do(proxyReq)
 	if err != nil {
 		log.Errorf("Request to backend failed: %v", err)
@@ -128,9 +128,18 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 		}
 	}
 	if shouldBan {
-		log.Infof("Banning URL %s %s %s", target.URL, resp.Status, bodyStr)
+		log.Infof("Banning URL %s %s %s", SanitizeParsedURL(parsedURL), resp.Status, bodyStr)
 		bm.BanURL(target.URL, time.Duration(banDuration)*time.Second)
 	}
 
 	return nil
+}
+
+// Sanitize
+func SanitizeParsedURL(p *url.URL) string {
+	path := p.Path
+	if len(path) > 5 {
+		path = path[:5]
+	}
+	return p.Host + path
 }
