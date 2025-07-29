@@ -11,7 +11,7 @@ import (
 
 var (
 	weightedRand = rand.New(rand.NewSource(time.Now().UnixNano()))
-	randMu       sync.Mutex
+	weightedMu   sync.Mutex
 )
 
 // Weighted selects a backend URL from the given targets based on a weighted random distribution.
@@ -45,9 +45,9 @@ func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig,
 	}
 
 	// Choose a random number in [1, totalWeight)
-	randMu.Lock()
+	weightedMu.Lock()
 	targetWeight := weightedRand.Intn(totalWeight) + 1
-	randMu.Unlock()
+	weightedMu.Unlock()
 
 	// Iterate and select based on cumulative weight
 	cumulative := 0
