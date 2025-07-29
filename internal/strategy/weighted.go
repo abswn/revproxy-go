@@ -10,7 +10,17 @@ import (
 
 var weightedRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-// Weighted algorithm selects a backend based on weighted random distribution.
+// Weighted selects a backend URL from the given targets based on a weighted random distribution.
+// It filters out banned URLs and targets with zero weight, then selects a target proportionally
+// to its weight.
+//
+// Parameters:
+// - targets: A slice of URLConfig objects representing the available targets.
+// - bm: A BanManager instance used to check if a URL is banned.
+//
+// Returns:
+// - A URLConfig object representing the selected target.
+// - A boolean indicating whether a valid target was found.
 func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig, bool) {
 
 	var validTargets []config.URLConfig
