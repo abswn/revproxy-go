@@ -32,7 +32,8 @@ func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig,
 
 	// Filter out banned URLs and prepare a list with valid weights
 	for _, target := range targets {
-		if target.Weight == 0 || bm.IsBanned(target.URL) {
+		// 0 or negative weight is skipped
+		if target.Weight <= 0 || bm.IsBanned(target.URL) {
 			continue
 		}
 		validTargets = append(validTargets, target)
