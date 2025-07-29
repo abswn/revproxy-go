@@ -2,13 +2,17 @@ package strategy
 
 import (
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/abswn/revproxy-go/internal/ban"
 	"github.com/abswn/revproxy-go/internal/config"
 )
 
-var weightedRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var (
+	weightedRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	randMu       sync.Mutex
+)
 
 // Weighted selects a backend URL from the given targets based on a weighted random distribution.
 // It filters out banned URLs and targets with zero weight, then selects a target proportionally
@@ -27,12 +31,12 @@ func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig,
 	totalWeight := 0
 
 	// Filter out banned URLs and prepare a list with valid weights
-	for _, u := range targets {
-		if u.Weight == 0 || bm.IsBanned(u.URL) {
+	for _, target := range targets {
+		if target.Weight == 0 || bm.IsBanned(target.URL) {
 			continue
 		}
-		validTargets = append(validTargets, u)
-		totalWeight += u.Weight
+		validTargets = append(validTargets, target)
+		totalWeight += target.Weight
 	}
 
 	if totalWeight == 0 || len(validTargets) == 0 {
@@ -40,14 +44,16 @@ func Weighted(targets []config.URLConfig, bm *ban.BanManager) (config.URLConfig,
 	}
 
 	// Choose a random number in [1, totalWeight)
+	randMu.Lock()
 	targetWeight := weightedRand.Intn(totalWeight) + 1
+	randMu.Unlock()
 
 	// Iterate and select based on cumulative weight
 	cumulative := 0
-	for _, u := range validTargets {
-		cumulative += u.Weight
+	for _, target := range validTargets {
+		cumulative += target.Weight
 		if cumulative >= targetWeight {
-			return u, true
+			return target, true
 		}
 	}
 
