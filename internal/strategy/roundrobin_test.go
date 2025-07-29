@@ -1,6 +1,7 @@
 package strategy_test
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestRoundRobin_CircularSelection(t *testing.T) {
 	bm.StartEvictionLoop(500 * time.Millisecond)
 
 	seen := make(map[string]bool)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
 		if !ok {
 			t.Fatalf("Expected valid URL, got none at iteration %d", i)
@@ -48,7 +49,7 @@ func TestRoundRobin_BanLogic(t *testing.T) {
 	bm.BanURL("http://b.com", 1*time.Second)
 
 	// Expect c.com to be selected repeatedly
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
 		if !ok || urlCfg.URL != "http://c.com" {
 			t.Fatalf("Expected http://c.com, got %s", urlCfg.URL)
@@ -59,7 +60,7 @@ func TestRoundRobin_BanLogic(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	seen := make(map[string]bool)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
 		if !ok {
 			t.Fatalf("Expected valid URL, got none at iteration %d", i)
@@ -83,5 +84,66 @@ func TestRoundRobin_AllBanned(t *testing.T) {
 	urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
 	if ok {
 		t.Errorf("Expected no available URLs, got %s", urlCfg.URL)
+	}
+}
+
+func TestRoundRobin_EmptyTargets(t *testing.T) {
+	var counter uint32
+	bm := ban.NewManager()
+
+	urlCfg, ok := strategy.RoundRobin([]config.URLConfig{}, &counter, bm)
+	if ok {
+		t.Errorf("Expected no available URLs, got %s", urlCfg.URL)
+	}
+}
+
+func TestRoundRobin_LargeCounter(t *testing.T) {
+	urls := []config.URLConfig{
+		{URL: "http://a.com"},
+		{URL: "http://b.com"},
+	}
+	var counter uint32 = 4_294_967_290 // Close to math.MaxUint32
+	bm := ban.NewManager()
+
+	urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
+	if !ok {
+		t.Fatalf("Expected valid URL, got none")
+	}
+
+	if urlCfg.URL != "http://a.com" && urlCfg.URL != "http://b.com" {
+		t.Errorf("Unexpected URL selected: %s", urlCfg.URL)
+	}
+}
+
+func TestRoundRobin_Concurrency(t *testing.T) {
+	urls := []config.URLConfig{
+		{URL: "http://a.com"},
+		{URL: "http://b.com"},
+		{URL: "http://c.com"},
+	}
+	var counter uint32
+	bm := ban.NewManager()
+
+	seen := make(map[string]int)
+	mu := &sync.Mutex{}
+	wg := &sync.WaitGroup{}
+
+	for range 100 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			urlCfg, ok := strategy.RoundRobin(urls, &counter, bm)
+			if ok {
+				mu.Lock()
+				seen[urlCfg.URL]++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if len(seen) != 3 {
+		t.Errorf("Expected all 3 URLs to be selected, saw %d", len(seen))
 	}
 }

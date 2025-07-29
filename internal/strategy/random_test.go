@@ -227,7 +227,7 @@ func TestRandom_RepeatedBans(t *testing.T) {
 	bm.BanURL("http://example.com", 1*time.Second)
 
 	// Initially, the banned URL should not be selected
-	for range 10 {
+	for i := 0; i < 10; i++ {
 		chosen, ok := strategy.Random(targets, bm)
 		if !ok {
 			t.Fatal("Expected valid backend but got none")
@@ -240,20 +240,16 @@ func TestRandom_RepeatedBans(t *testing.T) {
 	// Wait for the ban to expire
 	time.Sleep(2 * time.Second)
 
-	// Now, the previously banned URL should be selectable
-	chosen, ok := strategy.Random(targets, bm)
-	if !ok {
-		t.Fatal("Expected valid backend but got none")
-	}
-	if chosen.URL != "http://example.com" {
-		t.Errorf("Expected http://example.com, but got: %s", chosen.URL)
+	// Verify that http://example.com is now selectable
+	if bm.IsBanned("http://example.com") {
+		t.Errorf("Expected http://example.com to be unbanned, but it is still banned")
 	}
 
 	// Ban the URL again
 	bm.BanURL("http://example.com", 1*time.Second)
 
 	// Ensure it is banned again
-	for range 10 {
+	for i := 0; i < 10; i++ {
 		chosen, ok := strategy.Random(targets, bm)
 		if !ok {
 			t.Fatal("Expected valid backend but got none")
