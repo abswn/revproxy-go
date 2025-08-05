@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/abswn/revproxy-go/internal/ban"
 	"github.com/abswn/revproxy-go/internal/config"
@@ -31,12 +32,13 @@ func main() {
 	if mainCfg.Log.Output == "stdout" || mainCfg.Log.Output == "" {
 		log.SetOutput(os.Stdout)
 	} else {
-		f, err := os.OpenFile(mainCfg.Log.Output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			log.Fatalf("Failed to open log file: %v", err)
-		}
-		log.SetOutput(f)
-		defer f.Close()
+		log.SetOutput(&lumberjack.Logger{
+			Filename:   mainCfg.Log.Output, // e.g., "logs/output.log"
+			MaxSize:    100,                // megabytes
+			MaxBackups: 5,
+			MaxAge:     30, // days
+			Compress:   true,
+		})
 	}
 	if mainCfg.Log.Format == "json" {
 		log.SetFormatter(&log.JSONFormatter{})
