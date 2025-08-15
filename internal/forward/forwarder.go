@@ -2,6 +2,7 @@ package forward
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -70,10 +71,17 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 		}
 	}
 
+	// Sanitize the backend URL
+	sanitizedURL := SanitizeParsedURL(parsedURL)
+
 	// Send the request to the backend URL
-	log.Infof("Forwarding %s request for %s to backend %s", r.Method, r.URL.Path, SanitizeParsedURL(parsedURL))
+	log.Infof("Forwarding %s request for %s to backend %s", r.Method, r.URL.Path, sanitizedURL)
 	resp, err := client.Do(proxyReq)
 	if err != nil {
+		// Replace the url in the error message with sanitizedURL
+		errMsg := strings.Replace(err.Error(), parsedURL.String(), sanitizedURL, 1)
+		// Create new error
+		err = fmt.Errorf("%s", errMsg)
 		log.Errorf("Request to backend failed: %v", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return err
@@ -128,7 +136,7 @@ func ForwardRequest(w http.ResponseWriter, r *http.Request, target config.URLCon
 		}
 	}
 	if shouldBan {
-		log.Infof("Banning URL %s %s %s", SanitizeParsedURL(parsedURL), resp.Status, bodyStr)
+		log.Infof("Banning URL %s %s %s", sanitizedURL, resp.Status, bodyStr)
 		bm.BanURL(target.URL, time.Duration(banDuration)*time.Second)
 	}
 
