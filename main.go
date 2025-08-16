@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -32,6 +33,11 @@ func main() {
 	if mainCfg.Log.Output == "stdout" || mainCfg.Log.Output == "" {
 		log.SetOutput(os.Stdout)
 	} else {
+		// Create log directory if it doesn't exist
+		logDir := filepath.Dir(mainCfg.Log.Output)
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			log.Fatalf("Failed to create log directory %s: %v", logDir, err)
+		}
 		log.SetOutput(&lumberjack.Logger{
 			Filename:   mainCfg.Log.Output, // e.g., "logs/output.log"
 			MaxSize:    100,                // megabytes
